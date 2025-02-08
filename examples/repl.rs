@@ -1,6 +1,38 @@
 //! Subcommands example
-use reedline_repl_rs::clap::{Arg, ArgAction, ArgMatches, Command};
-use reedline_repl_rs::{Repl, Result};
+use std::collections::HashMap;
+
+use clap::{arg, command, Parser, Subcommand};
+use reedline_repl_rs::clap::{ArgAction, ArgMatches};
+use reedline_repl_rs::{CallBackMap, Repl, Result};
+
+#[derive(Parser, Debug)]
+#[command(name = "MyApp", version = "v0.1.0", about = "My very cool app")]
+pub struct MyApp {
+    #[command(subcommand)]
+    pub command: Commands,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum Commands {
+    /// Greeting
+    Say {
+        #[command(subcommand)]
+        command: SayCommands,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum SayCommands {
+    Hello {
+        #[arg(required = true)]
+        who: String,
+        uppercase: String,
+    },
+    Goodbye {
+        #[arg(long, action(ArgAction::SetTrue))]
+        spanish: bool,
+    },
+}
 
 fn say<T>(args: ArgMatches, _context: &mut T) -> Result<Option<String>> {
     match args.subcommand() {
@@ -21,27 +53,13 @@ fn say<T>(args: ArgMatches, _context: &mut T) -> Result<Option<String>> {
 }
 
 fn main() -> Result<()> {
+    let mut callbacks: CallBackMap<(), reedline_repl_rs::Error> = HashMap::new();
+
+    callbacks.insert("say".to_string(), say);
+
     let mut repl = Repl::new(())
-        .with_name("MyApp")
-        .with_version("v0.1.0")
-        .with_description("My very cool app")
         .with_banner("Welcome to MyApp")
-        .with_command(
-            Command::new("say")
-                .subcommand(
-                    Command::new("hello")
-                        .arg(Arg::new("who").required(true))
-                        .arg(Arg::new("uppercase")),
-                )
-                .subcommand(
-                    Command::new("goodbye").arg(
-                        Arg::new("spanish")
-                            .action(ArgAction::SetTrue)
-                            .long("spanish"),
-                    ),
-                )
-                .about("Greetings!"),
-            say,
-        );
+        .with_derived::<MyApp>(callbacks);
+
     repl.run()
 }
