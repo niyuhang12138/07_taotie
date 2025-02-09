@@ -1,4 +1,5 @@
 use clap::{ArgMatches, Parser};
+use datafusion::datasource::file_format::file_compression_type::FileCompressionType;
 
 use crate::{CmdExecutor, ReplContext, ReplMsg};
 
@@ -7,9 +8,16 @@ use super::ReplResult;
 #[derive(Debug, Clone)]
 pub enum DatasetConn {
     Postgres(String),
-    CSv(String),
+    CSv(FileOps),
     Parquet(String),
-    NdJson(String),
+    NdJson(FileOps),
+}
+
+#[derive(Debug, Clone)]
+pub struct FileOps {
+    pub filename: String,
+    pub ext: String,
+    pub compression: FileCompressionType,
 }
 
 #[derive(Parser, Debug)]
@@ -25,16 +33,57 @@ pub struct ConnectOps {
 }
 
 fn verify_conn(s: &str) -> Result<DatasetConn, String> {
-    if s.starts_with("postgres://") {
-        Ok(DatasetConn::Postgres(s.to_string()))
-    } else if s.ends_with(".csv") {
-        Ok(DatasetConn::CSv(s.to_string()))
-    } else if s.ends_with(".parquet") {
-        Ok(DatasetConn::Parquet(s.to_string()))
-    } else if s.ends_with(".ndjson") {
-        Ok(DatasetConn::NdJson(s.to_string()))
-    } else {
-        Err(format!("Invalid connection string: {}", s))
+    let conn_str = s.to_string();
+
+    if conn_str.starts_with("postgres://") {
+        return Ok(DatasetConn::Postgres(conn_str));
+    }
+
+    if conn_str.ends_with(".parquet") {
+        return Ok(DatasetConn::Parquet(conn_str));
+    }
+
+    let exts = conn_str.rsplit('.');
+    let count = exts.clone().count() - 1;
+    let mut exts = exts.take(count);
+    let ext1 = exts.next();
+    let ext2 = exts.next();
+    match (ext1, ext2) {
+        (Some(ext1), Some(ext2)) => {
+            let compression = match ext1 {
+                "gz" => FileCompressionType::GZIP,
+                "bz2" => FileCompressionType::BZIP2,
+                "xz" => FileCompressionType::XZ,
+                "zstd" => FileCompressionType::ZSTD,
+                v => return Err(format!("invalid compression type: {}", v)),
+            };
+
+            let opts = FileOps {
+                filename: s.to_string(),
+                ext: ext2.to_string(),
+                compression,
+            };
+
+            match ext1 {
+                "csv" => Ok(DatasetConn::CSv(opts)),
+                "json" | "jsonl" | "ndjson" => Ok(DatasetConn::NdJson(opts)),
+                v => Err(format!("Invalid file extension: {v}")),
+            }
+        }
+        (Some(ext1), None) => {
+            let opts = FileOps {
+                filename: s.to_string(),
+                ext: ext1.to_string(),
+                compression: FileCompressionType::UNCOMPRESSED,
+            };
+
+            match ext1 {
+                "csv" => Ok(DatasetConn::CSv(opts)),
+                "json" | "jsonl" | "ndjson" => Ok(DatasetConn::NdJson(opts)),
+                v => Err(format!("Invalid file extension: {v}")),
+            }
+        }
+        _ => Err(format!("Invalid Connection string: {s}")),
     }
 }
 
