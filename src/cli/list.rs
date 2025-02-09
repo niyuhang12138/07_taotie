@@ -1,13 +1,32 @@
+use super::ReplResult;
+use crate::{CmdExecutor, ReplContext, ReplDisplay, ReplMsg};
 use clap::ArgMatches;
+use clap::Parser;
 
-use crate::ReplContext;
-
-use super::{ReplCommand, ReplResult};
+#[derive(Debug, Parser)]
+pub struct ListOps;
 
 pub fn list(_args: ArgMatches, context: &mut ReplContext) -> ReplResult {
-    let cmd: ReplCommand = ReplCommand::List;
+    let ret = ReplMsg::new(ListOps::new());
 
-    context.send(cmd);
+    Ok(context.send(ret.0, ret.1))
+}
 
-    Ok(None)
+impl ListOps {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for ListOps {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CmdExecutor for ListOps {
+    async fn execute<T: crate::Backend>(self, backend: &mut T) -> anyhow::Result<String> {
+        let df = backend.list().await?;
+        df.display().await
+    }
 }

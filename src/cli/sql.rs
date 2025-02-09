@@ -1,12 +1,12 @@
 use clap::{ArgMatches, Parser};
 
-use crate::ReplContext;
+use crate::{CmdExecutor, ReplContext, ReplDisplay, ReplMsg};
 
-use super::{ReplCommand, ReplResult};
+use super::ReplResult;
 
 #[derive(Debug, Parser)]
 pub struct SqlOps {
-    #[arg(short, long, help = "SQL query to execute")]
+    #[arg(help = "SQL query to execute")]
     pub query: String,
 }
 
@@ -16,11 +16,9 @@ pub fn head(args: ArgMatches, context: &mut ReplContext) -> ReplResult {
         .expect("Query is required")
         .to_owned();
 
-    let cmd: ReplCommand = SqlOps::new(query).into();
+    let ret = ReplMsg::new(SqlOps::new(query));
 
-    context.send(cmd);
-
-    Ok(None)
+    Ok(context.send(ret.0, ret.1))
 }
 
 impl SqlOps {
@@ -29,8 +27,9 @@ impl SqlOps {
     }
 }
 
-impl From<SqlOps> for ReplCommand {
-    fn from(value: SqlOps) -> Self {
-        ReplCommand::Sql(value)
+impl CmdExecutor for SqlOps {
+    async fn execute<T: crate::Backend>(self, backend: &mut T) -> anyhow::Result<String> {
+        let df = backend.sql(&self.query).await?;
+        df.display().await
     }
 }

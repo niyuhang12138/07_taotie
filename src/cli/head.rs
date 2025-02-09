@@ -1,15 +1,13 @@
+use super::ReplResult;
+use crate::{CmdExecutor, ReplContext, ReplDisplay, ReplMsg};
 use clap::{ArgMatches, Parser};
-
-use crate::ReplContext;
-
-use super::{ReplCommand, ReplResult};
 
 #[derive(Parser, Debug)]
 pub struct HeadOps {
-    #[arg(short, long, help = "The name of the dataset")]
+    #[arg(help = "The name of the dataset")]
     pub name: String,
 
-    #[arg(short, long, help = "Number of rows to show")]
+    #[arg(short, help = "Number of rows to show")]
     pub n: Option<usize>,
 }
 
@@ -20,11 +18,9 @@ pub fn head(args: ArgMatches, context: &mut ReplContext) -> ReplResult {
         .to_owned();
     let n = args.get_one::<usize>("n").copied();
 
-    let cmd: ReplCommand = HeadOps::new(name, n).into();
+    let ret = ReplMsg::new(HeadOps::new(name, n));
 
-    context.send(cmd);
-
-    Ok(None)
+    Ok(context.send(ret.0, ret.1))
 }
 
 impl HeadOps {
@@ -33,8 +29,9 @@ impl HeadOps {
     }
 }
 
-impl From<HeadOps> for ReplCommand {
-    fn from(value: HeadOps) -> Self {
-        ReplCommand::Head(value)
+impl CmdExecutor for HeadOps {
+    async fn execute<T: crate::Backend>(self, backend: &mut T) -> anyhow::Result<String> {
+        let df = backend.head(&self.name, self.n.unwrap_or(5)).await?;
+        df.display().await
     }
 }

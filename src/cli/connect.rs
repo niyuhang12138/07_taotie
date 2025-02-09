@@ -1,26 +1,26 @@
 use clap::{ArgMatches, Parser};
 
-use crate::ReplContext;
+use crate::{CmdExecutor, ReplContext, ReplMsg};
 
-use super::{ReplCommand, ReplResult};
+use super::ReplResult;
 
 #[derive(Debug, Clone)]
 pub enum DatasetConn {
     Postgres(String),
     CSv(String),
     Parquet(String),
-    Json(String),
+    NdJson(String),
 }
 
 #[derive(Parser, Debug)]
 pub struct ConnectOps {
-    #[arg(short, long, value_parser = verify_conn, help = "Connection string to the dataset, could be postgres of local file (support: csv, parquet, json)")]
+    #[arg( value_parser = verify_conn, help = "Connection string to the dataset, could be postgres of local file (support: csv, parquet, json)")]
     pub conn: DatasetConn,
 
-    #[arg(short, long, help = "If database, the name of the table")]
+    #[arg(short, help = "If database, the name of the table")]
     pub table: Option<String>,
 
-    #[arg(short, long, help = "The name of the dataset")]
+    #[arg(help = "The name of the dataset")]
     pub name: String,
 }
 
@@ -31,8 +31,8 @@ fn verify_conn(s: &str) -> Result<DatasetConn, String> {
         Ok(DatasetConn::CSv(s.to_string()))
     } else if s.ends_with(".parquet") {
         Ok(DatasetConn::Parquet(s.to_string()))
-    } else if s.ends_with(".json") {
-        Ok(DatasetConn::Json(s.to_string()))
+    } else if s.ends_with(".ndjson") {
+        Ok(DatasetConn::NdJson(s.to_string()))
     } else {
         Err(format!("Invalid connection string: {}", s))
     }
@@ -50,11 +50,9 @@ pub fn connect(args: ArgMatches, context: &mut ReplContext) -> ReplResult {
         .expect("Name is required")
         .to_owned();
 
-    let cmd: ReplCommand = ConnectOps::new(conn, table, name).into();
+    let ret = ReplMsg::new(ConnectOps::new(conn, table, name));
 
-    context.send(cmd);
-
-    Ok(None)
+    Ok(context.send(ret.0, ret.1))
 }
 
 impl ConnectOps {
@@ -63,8 +61,9 @@ impl ConnectOps {
     }
 }
 
-impl From<ConnectOps> for ReplCommand {
-    fn from(value: ConnectOps) -> Self {
-        ReplCommand::Connect(value)
+impl CmdExecutor for ConnectOps {
+    async fn execute<T: crate::Backend>(self, backend: &mut T) -> anyhow::Result<String> {
+        backend.connect(&self).await?;
+        Ok(format!("Connected to dataset: {}", self.name))
     }
 }

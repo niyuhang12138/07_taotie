@@ -2,13 +2,16 @@ pub mod connect;
 pub mod describe;
 pub mod head;
 pub mod list;
+pub mod schema;
 pub mod sql;
 
 use clap::Parser;
+use enum_dispatch::enum_dispatch;
 
 pub type ReplResult = Result<Option<String>, reedline_repl_rs::Error>;
 
 #[derive(Parser, Debug)]
+#[enum_dispatch(CmdExecutor)]
 pub enum ReplCommand {
     #[command(
         name = "connect",
@@ -17,7 +20,10 @@ pub enum ReplCommand {
     Connect(connect::ConnectOps),
 
     #[command(name = "list", about = "List all registered datasets")]
-    List,
+    List(list::ListOps),
+
+    #[command(name = "schema", about = "Show schema of a dataset")]
+    Schema(schema::SchemaOps),
 
     #[command(name = "describe", about = "Describe a dataset")]
     Describe(describe::DescribeOps),
