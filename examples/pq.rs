@@ -1,6 +1,6 @@
 use anyhow::Result;
 use arrow::array::AsArray;
-use datafusion::{arrow::array::AsArray as _, prelude::*};
+use datafusion::prelude::*;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use polars::{prelude::*, sql::SQLContext};
 use std::fs::File;

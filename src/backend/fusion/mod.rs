@@ -1,12 +1,12 @@
-use std::ops::Deref;
-
-use anyhow::Ok;
-use datafusion::{
-    arrow::util::pretty::pretty_format_batches,
-    prelude::{CsvReadOptions, NdJsonReadOptions, SessionConfig, SessionContext},
-};
+mod describe;
 
 use crate::{cli::connect::DatasetConn, Backend, ReplDisplay};
+use datafusion::{
+    arrow::util::pretty::pretty_format_batches,
+    prelude::{CsvReadOptions, DataFrame, NdJsonReadOptions, SessionConfig, SessionContext},
+};
+use describe::DataFrameDescriber;
+use std::ops::Deref;
 
 pub struct DataFusionBackend(SessionContext);
 
@@ -66,8 +66,8 @@ impl Backend for DataFusionBackend {
 
     async fn describe(&self, name: &str) -> anyhow::Result<Self::DataFrame> {
         let df = self.0.sql(&format!("select * from {name}")).await?;
-        let df = df.describe().await?;
-        Ok(df)
+        let ddf = DataFrameDescriber::try_new(df)?;
+        ddf.describe().await
     }
 
     async fn head(&self, name: &str, size: usize) -> anyhow::Result<Self::DataFrame> {
@@ -98,7 +98,7 @@ impl Deref for DataFusionBackend {
     }
 }
 
-impl ReplDisplay for datafusion::dataframe::DataFrame {
+impl ReplDisplay for DataFrame {
     async fn display(self) -> anyhow::Result<String> {
         let batches = self.collect().await?;
         let data = pretty_format_batches(&batches)?;
